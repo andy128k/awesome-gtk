@@ -253,7 +253,7 @@ fn get_parameter(info: &ActionInfo, arg: &FnArg) -> Result<TokenStream2, Error> 
     let action_name = &info.name;
     let parameter_type = argument_type(arg)?;
     Ok(quote_spanned! { arg.span() =>
-        match parameter.and_then(|variant| <#parameter_type as glib::variant::FromVariant>::from_variant(variant)) {
+        match parameter.as_ref().and_then(|variant| <#parameter_type as glib::variant::FromVariant>::from_variant(variant)) {
             Some(parameter) => parameter,
             None => {
                 glib::g_critical!("actions", "Action {} expects a parameter of type {} but received `{:?}`.", #action_name, stringify!(#parameter_type), parameter);
@@ -290,6 +290,14 @@ fn add_comma(expression: TokenStream2) -> TokenStream2 {
     quote! { #expression , }
 }
 
+fn maybe_await(is_async: bool) -> TokenStream2 {
+    if is_async {
+        quote! { .await }
+    } else {
+        quote! {}
+    }
+}
+
 fn generate_activate_handler(
     info: &ActionInfo,
     handler: &ActivateHandler,
@@ -307,12 +315,21 @@ fn generate_activate_handler(
         .map(add_comma);
 
     let method = &handler.sig.ident;
+    let is_async = handler.sig.asyncness.is_some();
+    let maybe_await = maybe_await(is_async);
     let mut invoke = quote_spanned! { handler.sig.span() =>
-        this.#method(#state_arg #parameter_arg)
+        this.#method(#state_arg #parameter_arg) #maybe_await
     };
-
     if let Some(ref state_type) = handler.state_type()? {
         invoke = change_state(handler.sig.output.span(), &invoke, state_type);
+    }
+
+    if is_async {
+        invoke = quote! {
+            let action = action.clone();
+            let parameter: Option<glib::variant::Variant> = parameter.cloned();
+            glib::MainContext::default().spawn_local(async move { #invoke });
+        };
     }
 
     let handler = quote_spanned! { handler.sig.span() =>
@@ -330,21 +347,33 @@ fn generate_change_state_handler(
 ) -> Result<TokenStream2, Error> {
     let action_name = &info.name;
     let method = &handler.sig.ident;
+    let is_async = handler.sig.asyncness.is_some();
+    let maybe_await = maybe_await(is_async);
     let state_type = handler.state_type()?;
+    let mut invoke = quote_spanned! { handler.sig.span() =>
+        let new_state: #state_type = match new_state_opt.and_then(|state| state.get()) {
+            Some(value) => value,
+            None => {
+                glib::g_critical!("actions", "State of type {} is expected in action {} but it is None.", stringify!(#state_type), #action_name);
+                return;
+            }
+        };
+        let result: Option<#state_type> = this.#method(new_state) #maybe_await .into();
+        if let Some(ref new_state) = result {
+            action.set_state(&<#state_type as glib::variant::ToVariant>::to_variant(new_state));
+        }
+    };
+    if is_async {
+        invoke = quote! {
+            let action = action.clone();
+            let new_state_opt: Option<glib::variant::Variant> = new_state_opt.cloned();
+            glib::MainContext::default().spawn_local(async move { #invoke });
+        };
+    }
     Ok(quote_spanned! { handler.sig.span() =>
         #[allow(unused_variables)]
         action.connect_change_state(glib::clone!(@weak self as this => move |action, new_state_opt| {
-            let new_state: #state_type = match new_state_opt.and_then(|state| state.get()) {
-                Some(value) => value,
-                None => {
-                    glib::g_critical!("actions", "State of type {} is expected in action {} but it is None.", stringify!(#state_type), #action_name);
-                    return;
-                }
-            };
-            let result: Option<#state_type> = this.#method(new_state).into();
-            if let Some(ref new_state) = result {
-                action.set_state(&<#state_type as glib::variant::ToVariant>::to_variant(new_state));
-            }
+            #invoke
         }));
     })
 }
