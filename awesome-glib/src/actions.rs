@@ -320,7 +320,7 @@ fn generate_activate_handler(
     let mut invoke = quote_spanned! { handler.sig.span() =>
         this.#method(#state_arg #parameter_arg) #maybe_await
     };
-    if let Some(ref state_type) = handler.state_type()? {
+    if let Some(state_type) = handler.state_type()? {
         invoke = change_state(handler.sig.output.span(), &invoke, state_type);
     }
 
