@@ -2,6 +2,7 @@
 
 [![Build](https://github.com/andy128k/awesome-gtk/actions/workflows/build.yml/badge.svg)](https://github.com/andy128k/awesome-gtk/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/andy128k/awesome-gtk/branch/main/graph/badge.svg)](https://codecov.io/gh/andy128k/awesome-gtk)
+[![Crates.io Status](https://img.shields.io/crates/v/awesome-glib.svg)](https://crates.io/crates/awesome-glib)
 
 Supplemental macros for gtk-rs
 
