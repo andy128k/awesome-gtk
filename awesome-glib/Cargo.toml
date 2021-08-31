@@ -1,5 +1,9 @@
 [package]
 name = "awesome-glib"
+description = "Bunch of macros to make a life of gtk/glib user easier"
+documentation = "https://docs.rs/awesome-glib"
+homepage = "https://github.com/andy128k/awesome-gtk/"
+repository = "https://github.com/andy128k/awesome-gtk/"
 version = "0.1.0"
 edition = "2018"
 license = "MIT"
