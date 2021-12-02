@@ -115,13 +115,11 @@ impl ActivateHandler {
     }
 
     fn state_type(&self) -> Result<Option<&Type>, Error> {
-        self.state_arg().map(|arg| argument_type(arg)).transpose()
+        self.state_arg().map(argument_type).transpose()
     }
 
     fn parameter_type(&self) -> Result<Option<&Type>, Error> {
-        self.parameter_arg()
-            .map(|arg| argument_type(arg))
-            .transpose()
+        self.parameter_arg().map(argument_type).transpose()
     }
 }
 
@@ -253,6 +251,7 @@ fn get_parameter(info: &ActionInfo, arg: &FnArg) -> Result<TokenStream2, Error> 
     let action_name = &info.name;
     let parameter_type = argument_type(arg)?;
     Ok(quote_spanned! { arg.span() =>
+        #[allow(clippy::redundant_closure)]
         match parameter.as_ref().and_then(|variant| <#parameter_type as glib::variant::FromVariant>::from_variant(variant)) {
             Some(parameter) => parameter,
             None => {
@@ -279,6 +278,7 @@ fn get_state(info: &ActionInfo, arg: &FnArg) -> Result<TokenStream2, Error> {
 
 fn change_state(span: Span, expression: &TokenStream2, state_type: &Type) -> TokenStream2 {
     quote_spanned! { span => {
+        #[allow(clippy::useless_conversion)]
         let new_state_opt: Option<#state_type> = (#expression).into();
         if let Some(ref new_state) = new_state_opt {
             action.change_state(&<#state_type as glib::variant::ToVariant>::to_variant(new_state));
