@@ -10,18 +10,12 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-    - uses: actions-rs/install@v0.1
-      with:
-        crate: cargo-tarpaulin
-        use-tool-cache: true
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: taiki-e/install-action@cargo-llvm-cov
     - name: Run coverage
-      run: cargo tarpaulin -f -t 5 --out Xml -v -- --test-threads=1
+      run: cargo llvm-cov --lcov --output-path lcov.info
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v3 
       with:
-        token: ${{secrets.CODECOV_TOKEN}}
+        files: lcov.info
