@@ -5,18 +5,18 @@ documentation = "https://docs.rs/awesome-glib"
 homepage = "https://github.com/andy128k/awesome-gtk/"
 repository = "https://github.com/andy128k/awesome-gtk/"
 version = "0.1.1"
-edition = "2018"
+edition = "2021"
 license = "MIT"
 
 [dependencies]
 syn = { version = "1", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
-darling = "0.13"
+darling = "0.14"
 
 [lib]
 proc-macro = true
 
 [dev-dependencies]
-glib = "0.14"
-gio = "0.14"
+glib = "0.17"
+gio = "0.17"

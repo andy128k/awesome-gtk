@@ -360,7 +360,7 @@ fn generate_change_state_handler(
         };
         let result: Option<#state_type> = this.#method(new_state) #maybe_await .into();
         if let Some(ref new_state) = result {
-            action.set_state(&<#state_type as glib::variant::ToVariant>::to_variant(new_state));
+            action.set_state(<#state_type as glib::variant::ToVariant>::to_variant(new_state));
         }
     };
     if is_async {
@@ -404,7 +404,7 @@ fn generate_action(info: &ActionInfo) -> Result<TokenStream2, Error> {
         quote! {
             let initial_state: #state_type = #initial_state_expr;
             let initial_state_variant = <#state_type as glib::variant::ToVariant>::to_variant(&initial_state);
-            let action = gio::SimpleAction::new_stateful(#action_name, #parameter, &initial_state_variant);
+            let action = gio::SimpleAction::new_stateful(#action_name, #parameter, initial_state_variant);
         }
     } else {
         quote! {
