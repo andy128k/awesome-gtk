@@ -10,11 +10,16 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
+    - name: Install dependencies
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends libgtk-4-dev xvfb
     - uses: actions/checkout@v3
     - uses: dtolnay/rust-toolchain@stable
     - uses: taiki-e/install-action@cargo-llvm-cov
     - name: Run coverage
-      run: cargo llvm-cov --lcov --output-path lcov.info
+      run: xvfb-run cargo llvm-cov --lcov --output-path lcov.info
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3 
       with:

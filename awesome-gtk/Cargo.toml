@@ -1,0 +1,17 @@
+[package]
+name = "awesome-gtk"
+description = "Assorted utilities to make a life of gtk user easier"
+documentation = "https://docs.rs/awesome-gtk"
+homepage = "https://github.com/andy128k/awesome-gtk/"
+repository = "https://github.com/andy128k/awesome-gtk/"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.6" }
+
+[[test]]
+name = "specs"
+path = "specs/main.rs"
+harness = false
