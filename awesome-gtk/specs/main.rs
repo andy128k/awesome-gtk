@@ -1,3 +1,4 @@
+mod bitset;
 mod widget;
 
 macro_rules! run_test {
@@ -11,6 +12,8 @@ macro_rules! run_test {
 fn main() {
     eprintln!("");
     gtk::init().unwrap();
+
+    run_test!(bitset::test_bitset_iter);
 
     run_test!(widget::test_iter);
     run_test!(widget::test_iter_rev);
