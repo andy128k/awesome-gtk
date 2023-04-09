@@ -1,30 +1,65 @@
-use darling::{util::Flag, FromMeta};
-use proc_macro::TokenStream;
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
 use std::collections::BTreeMap;
 use syn::{
-    parse, spanned::Spanned, Attribute, Error, FnArg, ImplItem, ImplItemMethod, ItemImpl, Lit,
-    Meta, MetaList, NestedMeta, PatType, Signature, Type,
+    meta::ParseNestedMeta, parse, spanned::Spanned, Attribute, Error, FnArg, ImplItem, ImplItemFn,
+    ItemImpl, Lit, LitStr, PatType, Result, Signature, Type,
 };
 
-#[derive(Debug, Default, FromMeta)]
-#[darling(default)]
+#[derive(Default)]
 pub struct ActionImplAttributes {
-    register_fn: Option<String>,
+    register_fn: Option<LitStr>,
 }
 
-#[derive(Debug, Default, FromMeta)]
-#[darling(default)]
+impl ActionImplAttributes {
+    pub fn parse(&mut self, meta: ParseNestedMeta) -> Result<()> {
+        if meta.path.is_ident("register_fn") {
+            self.register_fn = Some(meta.value()?.parse()?);
+            Ok(())
+        } else {
+            Err(meta.error("unsupported actions property"))
+        }
+    }
+}
+
+#[derive(Default)]
 struct ActionAttributes {
     name: Option<String>,
-    stateful: Flag,
+    stateful: bool,
     initial_state: Option<Lit>,
-    change_state: Flag,
-    no_parameter: Flag,
+    change_state: bool,
+    no_parameter: bool,
 }
 
-#[derive(Debug)]
+impl ActionAttributes {
+    fn parse(attributes: &[Attribute]) -> Result<ActionAttributes> {
+        let mut action_attributes = ActionAttributes::default();
+        for attr in attributes {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("name") {
+                    action_attributes.name = Some(meta.value()?.parse::<LitStr>()?.value());
+                    Ok(())
+                } else if meta.path.is_ident("stateful") {
+                    action_attributes.stateful = true;
+                    Ok(())
+                } else if meta.path.is_ident("change_state") {
+                    action_attributes.change_state = true;
+                    Ok(())
+                } else if meta.path.is_ident("no_parameter") {
+                    action_attributes.no_parameter = true;
+                    Ok(())
+                } else if meta.path.is_ident("initial_state") {
+                    action_attributes.initial_state = Some(meta.value()?.parse::<Lit>()?);
+                    Ok(())
+                } else {
+                    Err(meta.error("unrecognized option"))
+                }
+            })?;
+        }
+        Ok(action_attributes)
+    }
+}
+
 struct ActionHandlerInfo {
     attrs: ActionAttributes,
     sig: Signature,
@@ -40,10 +75,7 @@ impl ActionHandlerInfo {
     }
 }
 
-fn expect_one<T>(
-    mut vec: Vec<T>,
-    make_item_error: impl Fn(&T) -> Error,
-) -> Result<Option<T>, Error> {
+fn expect_one<T>(mut vec: Vec<T>, make_item_error: impl Fn(&T) -> Error) -> Result<Option<T>> {
     match vec.len() {
         0 => Ok(None),
         1 => Ok(Some(vec.remove(0))),
@@ -65,7 +97,7 @@ struct ActivateHandler {
 }
 
 impl ActivateHandler {
-    fn try_from_signature(sig: Signature, stateful: bool) -> Result<Self, Error> {
+    fn try_from_signature(sig: Signature, stateful: bool) -> Result<Self> {
         if !is_assoc(&sig) {
             return Err(Error::new(
                 sig.span(),
@@ -114,11 +146,11 @@ impl ActivateHandler {
             .map(|index| &self.sig.inputs[index])
     }
 
-    fn state_type(&self) -> Result<Option<&Type>, Error> {
+    fn state_type(&self) -> Result<Option<&Type>> {
         self.state_arg().map(argument_type).transpose()
     }
 
-    fn parameter_type(&self) -> Result<Option<&Type>, Error> {
+    fn parameter_type(&self) -> Result<Option<&Type>> {
         self.parameter_arg().map(argument_type).transpose()
     }
 }
@@ -129,7 +161,7 @@ struct ChangeStateHandler {
 }
 
 impl ChangeStateHandler {
-    fn try_from_signature(sig: Signature, no_parameter: bool) -> Result<Self, Error> {
+    fn try_from_signature(sig: Signature, no_parameter: bool) -> Result<Self> {
         if !is_assoc(&sig) {
             return Err(Error::new(
                 sig.span(),
@@ -152,7 +184,7 @@ impl ChangeStateHandler {
         &self.sig.inputs[1]
     }
 
-    fn state_type(&self) -> Result<&Type, Error> {
+    fn state_type(&self) -> Result<&Type> {
         argument_type(self.state_arg())
     }
 }
@@ -165,7 +197,7 @@ struct ActionInfo {
 }
 
 impl ActionInfo {
-    fn try_from_handlers(name: String, handlers: Vec<ActionHandlerInfo>) -> Result<Self, Error> {
+    fn try_from_handlers(name: String, handlers: Vec<ActionHandlerInfo>) -> Result<Self> {
         let (change_state_handlers, activate_handlers): (Vec<_>, Vec<_>) = handlers
             .into_iter()
             .partition(|h| h.attrs.change_state.into());
@@ -227,7 +259,7 @@ impl ActionInfo {
         })
     }
 
-    fn state_type(&self) -> Result<Option<&Type>, Error> {
+    fn state_type(&self) -> Result<Option<&Type>> {
         if let Some(ref h) = self.change_state_handler {
             h.state_type().map(Some)
         } else if let Some(ref h) = self.activate_handler {
@@ -237,7 +269,7 @@ impl ActionInfo {
         }
     }
 
-    fn parameter_type(&self) -> Result<Option<&Type>, Error> {
+    fn parameter_type(&self) -> Result<Option<&Type>> {
         match (&self.activate_handler, &self.change_state_handler) {
             (Some(ref handler), _) => handler.parameter_type(),
             (None, Some(ref handler)) if handler.no_parameter => Ok(None),
@@ -247,7 +279,7 @@ impl ActionInfo {
     }
 }
 
-fn get_parameter(info: &ActionInfo, arg: &FnArg) -> Result<TokenStream2, Error> {
+fn get_parameter(info: &ActionInfo, arg: &FnArg) -> Result<TokenStream> {
     let action_name = &info.name;
     let parameter_type = argument_type(arg)?;
     Ok(quote_spanned! { arg.span() =>
@@ -262,7 +294,7 @@ fn get_parameter(info: &ActionInfo, arg: &FnArg) -> Result<TokenStream2, Error> 
     })
 }
 
-fn get_state(info: &ActionInfo, arg: &FnArg) -> Result<TokenStream2, Error> {
+fn get_state(info: &ActionInfo, arg: &FnArg) -> Result<TokenStream> {
     let action_name = &info.name;
     let state_type = argument_type(arg)?;
     Ok(quote_spanned! { arg.span() =>
@@ -276,7 +308,7 @@ fn get_state(info: &ActionInfo, arg: &FnArg) -> Result<TokenStream2, Error> {
     })
 }
 
-fn change_state(span: Span, expression: &TokenStream2, state_type: &Type) -> TokenStream2 {
+fn change_state(span: Span, expression: &TokenStream, state_type: &Type) -> TokenStream {
     quote_spanned! { span => {
         #[allow(clippy::useless_conversion)]
         let new_state_opt: Option<#state_type> = (#expression).into();
@@ -286,11 +318,11 @@ fn change_state(span: Span, expression: &TokenStream2, state_type: &Type) -> Tok
     }}
 }
 
-fn add_comma(expression: TokenStream2) -> TokenStream2 {
+fn add_comma(expression: TokenStream) -> TokenStream {
     quote! { #expression , }
 }
 
-fn maybe_await(is_async: bool) -> TokenStream2 {
+fn maybe_await(is_async: bool) -> TokenStream {
     if is_async {
         quote! { .await }
     } else {
@@ -298,10 +330,7 @@ fn maybe_await(is_async: bool) -> TokenStream2 {
     }
 }
 
-fn generate_activate_handler(
-    info: &ActionInfo,
-    handler: &ActivateHandler,
-) -> Result<TokenStream2, Error> {
+fn generate_activate_handler(info: &ActionInfo, handler: &ActivateHandler) -> Result<TokenStream> {
     let state_arg = handler
         .state_arg()
         .map(|arg| get_state(info, arg))
@@ -344,7 +373,7 @@ fn generate_activate_handler(
 fn generate_change_state_handler(
     info: &ActionInfo,
     handler: &ChangeStateHandler,
-) -> Result<TokenStream2, Error> {
+) -> Result<TokenStream> {
     let action_name = &info.name;
     let method = &handler.sig.ident;
     let is_async = handler.sig.asyncness.is_some();
@@ -378,7 +407,7 @@ fn generate_change_state_handler(
     })
 }
 
-fn generate_action(info: &ActionInfo) -> Result<TokenStream2, Error> {
+fn generate_action(info: &ActionInfo) -> Result<TokenStream> {
     let action_name = &info.name;
 
     let parameter = if let Some(parameter_type) = info.parameter_type()? {
@@ -446,30 +475,13 @@ fn combine_errors(error_acc: &mut Option<Error>, error: Error) {
     }
 }
 
-fn attributes_to_metas(attributes: Vec<Attribute>) -> Result<Vec<NestedMeta>, Error> {
-    let mut metas = Vec::new();
-    let mut error = None;
-    for attr in attributes {
-        let meta = attr.parse_meta()?;
-        match meta {
-            Meta::List(MetaList { nested, .. }) => metas.extend(nested),
-            _ => combine_errors(&mut error, Error::new(attr.span(), "Unexpected attribute")),
-        }
-    }
-    if let Some(error) = error {
-        Err(error)
-    } else {
-        Ok(metas)
-    }
-}
-
 fn is_assoc(sig: &Signature) -> bool {
     sig.inputs
         .first()
         .map_or(false, |arg| matches!(arg, FnArg::Receiver(..)))
 }
 
-fn argument_type(arg: &FnArg) -> Result<&Type, Error> {
+fn argument_type(arg: &FnArg) -> Result<&Type> {
     match arg {
         FnArg::Typed(PatType { ty, .. }) => Ok(&*ty),
         _ => Err(Error::new(
@@ -481,12 +493,12 @@ fn argument_type(arg: &FnArg) -> Result<&Type, Error> {
 
 fn generate_register_method(
     attrs: &ActionImplAttributes,
-    actions: &[TokenStream2],
-) -> ImplItemMethod {
-    let register_fn = format_ident!(
-        "{}",
-        attrs.register_fn.as_deref().unwrap_or("register_actions")
-    );
+    actions: &[TokenStream],
+) -> Result<ImplItemFn> {
+    let register_fn = match attrs.register_fn {
+        Some(ref name) => format_ident!("{}", name.value()),
+        None => format_ident!("register_actions"),
+    };
     let register_method = quote! {
         #[allow(clippy)]
         fn #register_fn<AM: glib::object::IsA<gio::ActionMap>>(&self, map: &AM) {
@@ -495,22 +507,17 @@ fn generate_register_method(
             )*
         }
     };
-    parse(register_method.into()).unwrap()
+    parse(register_method.into())
 }
 
-pub fn actions(
-    attrs: ActionImplAttributes,
-    mut input: ItemImpl,
-) -> Result<TokenStream, TokenStream> {
+pub fn actions(attrs: ActionImplAttributes, mut input: ItemImpl) -> Result<TokenStream> {
     let mut action_handlers: BTreeMap<String, Vec<ActionHandlerInfo>> = BTreeMap::new();
     for item in input.items.iter_mut() {
-        if let ImplItem::Method(method) = item {
+        if let ImplItem::Fn(method) = item {
             let attributes =
-                extract_from_vec(&mut method.attrs, |attr| attr.path.is_ident("action"));
-            let metas = attributes_to_metas(attributes).map_err(|err| err.to_compile_error())?;
+                extract_from_vec(&mut method.attrs, |attr| attr.path().is_ident("action"));
             let info = ActionHandlerInfo {
-                attrs: ActionAttributes::from_list(&metas)
-                    .map_err(|err| TokenStream::from(err.write_errors()))?,
+                attrs: ActionAttributes::parse(&attributes)?,
                 sig: method.sig.clone(),
             };
             action_handlers
@@ -523,17 +530,15 @@ pub fn actions(
     let action_infos: Vec<ActionInfo> = action_handlers
         .into_iter()
         .map(|(name, handlers)| ActionInfo::try_from_handlers(name, handlers))
-        .collect::<Result<_, _>>()
-        .map_err(|err| err.to_compile_error())?;
+        .collect::<Result<_>>()?;
 
-    let action_definitions: Vec<TokenStream2> = action_infos
+    let action_definitions: Vec<TokenStream> = action_infos
         .iter()
         .map(generate_action)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| err.to_compile_error())?;
+        .collect::<Result<Vec<_>>>()?;
 
-    let register_method = generate_register_method(&attrs, &action_definitions);
-    input.items.push(ImplItem::Method(register_method));
+    let register_method = generate_register_method(&attrs, &action_definitions)?;
+    input.items.push(ImplItem::Fn(register_method));
 
     Ok(quote!(#input).into())
 }

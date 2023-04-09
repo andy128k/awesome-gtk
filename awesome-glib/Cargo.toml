@@ -9,10 +9,9 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-syn = { version = "1", features = ["full"] }
+syn = { version = "2", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
-darling = "0.14"
 
 [lib]
 proc-macro = true

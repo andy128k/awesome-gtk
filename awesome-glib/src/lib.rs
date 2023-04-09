@@ -2,9 +2,10 @@ extern crate proc_macro;
 
 mod actions;
 
-use darling::FromMeta;
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, AttributeArgs, ItemImpl};
+use syn::{parse_macro_input, ItemImpl};
+
+use crate::actions::ActionImplAttributes;
 
 /// Macro for creating [`gio::Action`]s and registering them in a given
 /// [`gio::ActionMap`]. It generates a method `register_actions` with
@@ -188,12 +189,14 @@ use syn::{parse_macro_input, AttributeArgs, ItemImpl};
 #[proc_macro_attribute]
 pub fn actions(args: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemImpl);
-    let attribute_args = parse_macro_input!(args as AttributeArgs);
-    let attrs = match actions::ActionImplAttributes::from_list(&attribute_args) {
-        Ok(v) => v,
-        Err(e) => {
-            return TokenStream::from(e.write_errors());
-        }
-    };
-    actions::actions(attrs, input).unwrap_or_else(|err| err)
+
+    let mut action_args = ActionImplAttributes::default();
+    if !args.is_empty() {
+        let action_args_parser = syn::meta::parser(|meta| action_args.parse(meta));
+        parse_macro_input!(args with action_args_parser);
+    }
+
+    actions::actions(action_args, input)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
 }
