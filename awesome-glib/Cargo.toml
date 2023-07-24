@@ -17,5 +17,5 @@ proc-macro2 = "1"
 proc-macro = true
 
 [dev-dependencies]
-glib = "0.17"
-gio = "0.17"
+glib = "0.18"
+gio = "0.18"
