@@ -3,3 +3,4 @@ members = [
     "awesome-glib",
     "awesome-gtk",
 ]
+resolver = "2"

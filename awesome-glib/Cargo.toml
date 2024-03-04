@@ -4,7 +4,7 @@ description = "Bunch of macros to make a life of gtk/glib user easier"
 documentation = "https://docs.rs/awesome-glib"
 homepage = "https://github.com/andy128k/awesome-gtk/"
 repository = "https://github.com/andy128k/awesome-gtk/"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 
@@ -17,5 +17,5 @@ proc-macro2 = "1"
 proc-macro = true
 
 [dev-dependencies]
-glib = "0.18"
-gio = "0.18"
+glib = "0.19"
+gio = "0.19"
