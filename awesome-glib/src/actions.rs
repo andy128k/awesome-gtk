@@ -362,10 +362,11 @@ fn generate_activate_handler(info: &ActionInfo, handler: &ActivateHandler) -> Re
     }
 
     let handler = quote_spanned! { handler.sig.span() =>
-        #[allow(unused_variables)]
-        action.connect_activate(
-            glib::clone!(@weak self as this => move |action, parameter| #invoke)
-        );
+        #[allow(unused_variables, unused_braces)]
+        action.connect_activate(glib::clone!(
+            #[weak(rename_to = this)] self,
+            move |action, parameter| { #invoke },
+        ));
     };
     Ok(handler)
 }
@@ -400,10 +401,11 @@ fn generate_change_state_handler(
         };
     }
     Ok(quote_spanned! { handler.sig.span() =>
-        #[allow(unused_variables)]
-        action.connect_change_state(glib::clone!(@weak self as this => move |action, new_state_opt| {
-            #invoke
-        }));
+        #[allow(unused_variables, unused_braces)]
+        action.connect_change_state(glib::clone!(
+            #[weak(rename_to = this)] self,
+            move |action, new_state_opt| { #invoke },
+        ));
     })
 }
 
