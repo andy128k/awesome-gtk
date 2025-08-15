@@ -4,7 +4,7 @@ description = "Assorted utilities to make a life of gtk user easier"
 documentation = "https://docs.rs/awesome-gtk"
 homepage = "https://github.com/andy128k/awesome-gtk/"
 repository = "https://github.com/andy128k/awesome-gtk/"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
 

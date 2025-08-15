@@ -6,6 +6,6 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-gtk = { package = "gtk4", version = "0.9" }
-glib = "0.20"
-gio = "0.20"
+gtk = { package = "gtk4", version = "0.10" }
+glib = "0.21"
+gio = "0.21"
